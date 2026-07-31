@@ -7,12 +7,12 @@ pipeline {
         choice(
             name: 'MODULE',
             choices: [
+                'activemq',
+                'auth',
+                'digistore',
                 'frontend',
                 'messaging',
                 'node',
-                'database',
-                'auth',
-                'digistore',
                 'retail',
                 'soa'
             ],
@@ -58,52 +58,49 @@ pipeline {
 
                     def moduleConfig = [
 
-                        frontend : [
-                            git : 'git@github.com:48months/frontend-module.git',
-                            ecr : 'frontend-development'
-                        ],
-
-                        messaging : [
-                            git : 'git@github.com:48months/messaging-module.git',
-                            ecr : 'messaging-module-development'
-                        ],
-
-                        node : [
-                            git : 'git@github.com:48months/node-module.git',
-                            ecr : 'node-module-development'
-                        ],
-
-                        digistore : [
-                            git : 'git@github.com:48months/digistore-module.git',
-                            ecr : 'digistore-module'
-                        ],
-
-                        retail : [
-                            git : 'git@github.com:48months/retail-module.git',
-                            ecr : 'retail-sim-module'
-                        ],
-
-                        soa : [
-                            git : 'git@github.com:48months/soa-module.git',
-                            ecr : 'soa-module-development'
-                        ],
-
-                        database : [
-                            git : 'git@github.com:48months/database-module.git',
-                            ecr : 'database-module'
+                        activemq : [
+                            git : 'git@github.com:48months/activemq-cron-module.git',
+                            ecr : 'activemq-crons_v2'
                         ],
 
                         auth : [
                             git : 'git@github.com:48months/auth-module.git',
-                            ecr : 'auth-module'
+                            ecr : 'java-base-image_v2'
+                        ],
+
+                        digistore : [
+                            git : 'git@github.com:48months/digistore-module.git',
+                            ecr : 'digistore-module_v2'
+                        ],
+
+                        frontend : [
+                            git : 'git@github.com:48months/frontend-module.git',
+                            ecr : 'frontend_v2'
+                        ],
+
+                        messaging : [
+                            git : 'git@github.com:48months/messaging-module.git',
+                            ecr : 'messaging-module_v2'
+                        ],
+
+                        node : [
+                            git : 'git@github.com:48months/node-module.git',
+                            ecr : 'node-module_v2'
+                        ],
+
+                        retail : [
+                            git : 'git@github.com:48months/retail-module.git',
+                            ecr : 'retail-sim-module_v2'
+                        ],
+
+                        soa : [
+                            git : 'git@github.com:48months/soa-module.git',
+                            ecr : 'soa-client-module_v2'
                         ]
                     ]
 
-                    env.GIT_REPO =
-                        moduleConfig[params.MODULE].git
-
-                    env.ECR_REPO =
-                        moduleConfig[params.MODULE].ecr
+                    env.GIT_REPO = moduleConfig[params.MODULE].git
+                    env.ECR_REPO = moduleConfig[params.MODULE].ecr
 
                     def branchMap = [
                         dev     : 'development',
@@ -119,6 +116,15 @@ pipeline {
                             url: env.GIT_REPO
                         ]]
                     )
+
+                    echo """
+                    ===================================
+                    MODULE      : ${params.MODULE}
+                    ENVIRONMENT : ${params.ENVIRONMENT}
+                    GIT REPO    : ${env.GIT_REPO}
+                    ECR REPO    : ${env.ECR_REPO}
+                    ===================================
+                    """
                 }
             }
         }
@@ -129,18 +135,44 @@ pipeline {
 
                 script {
 
-                    if (fileExists('package.json')) {
+                    if (params.MODULE == 'frontend') {
 
-                        echo "Node/Angular Application Detected"
+                        dir('frontend') {
+
+                            sh '''
+                            npm cache clean --force || true
+                            npm install -g @angular/cli@8.3.29
+                            npm install --force
+                            '''
+
+                            if (params.ENVIRONMENT in ['dev', 'staging']) {
+
+                                sh '''
+                                ng build \
+                                  --aot=true \
+                                  --prod \
+                                  --configuration stg
+                                '''
+
+                            } else {
+
+                                sh '''
+                                ng build \
+                                  --aot=true \
+                                  --prod
+                                '''
+                            }
+                        }
+
+                    } else if (fileExists('package.json')) {
 
                         sh '''
-                        npm cache clean --force || true
                         npm install --force
                         '''
 
                     } else {
 
-                        echo "Skipping npm build"
+                        echo "No build step required"
                     }
                 }
             }
@@ -153,13 +185,13 @@ pipeline {
                 script {
 
                     def awsId = params.AWS_ACCOUNT == 'non-prod'
-                        ? env.NON_PROD_ID
-                        : env.PROD_ID
+                            ? env.NON_PROD_ID
+                            : env.PROD_ID
 
                     withAWS(
                         credentials: params.AWS_ACCOUNT == 'non-prod'
-                            ? 'aws_non_prod'
-                            : 'aws_prod',
+                                ? 'aws_non_prod'
+                                : 'aws_prod',
                         region: env.AWS_REGION
                     ) {
 
@@ -185,12 +217,26 @@ pipeline {
                     env.IMAGE_TAG =
                         "${params.ENVIRONMENT}-${BUILD_NUMBER}"
 
-                    sh """
-                    docker build \
-                      --pull \
-                      --no-cache \
-                      -t ${params.MODULE}:${BUILD_NUMBER} .
-                    """
+                    if (params.MODULE == 'frontend') {
+
+                        sh """
+                        docker build \
+                          --pull \
+                          --no-cache \
+                          -t ${params.MODULE}:${BUILD_NUMBER} \
+                          -f ./frontend/Dockerfile \
+                          ./frontend
+                        """
+
+                    } else {
+
+                        sh """
+                        docker build \
+                          --pull \
+                          --no-cache \
+                          -t ${params.MODULE}:${BUILD_NUMBER} .
+                        """
+                    }
                 }
             }
         }
@@ -202,23 +248,37 @@ pipeline {
                 script {
 
                     def awsId = params.AWS_ACCOUNT == 'non-prod'
-                        ? env.NON_PROD_ID
-                        : env.PROD_ID
+                            ? env.NON_PROD_ID
+                            : env.PROD_ID
 
                     def tags = []
 
-                    if (params.ENVIRONMENT in ['dev','staging']) {
+                    if (params.ENVIRONMENT == 'dev') {
 
                         tags = [
-                            "latest-${params.ENVIRONMENT}",
-                            "${params.ENVIRONMENT}-${BUILD_NUMBER}"
+                            'latest-dev',
+                            "dev-${BUILD_NUMBER}"
+                        ]
+
+                    } else if (params.ENVIRONMENT == 'staging') {
+
+                        tags = [
+                            'latest-staging',
+                            "staging-${BUILD_NUMBER}"
+                        ]
+
+                    } else if (params.ENVIRONMENT == 'preprod') {
+
+                        tags = [
+                            'latest-preprod',
+                            "preprod-${BUILD_NUMBER}"
                         ]
 
                     } else {
 
                         tags = [
-                            "latest",
-                            "${params.ENVIRONMENT}-${BUILD_NUMBER}"
+                            'latest',
+                            "prod-${BUILD_NUMBER}"
                         ]
                     }
 
@@ -243,14 +303,16 @@ pipeline {
         success {
 
             echo """
-=========================================
-Image Push Successful
+==================================================
 
-Module      : ${params.MODULE}
-Repository  : ${env.ECR_REPO}
-Image Tag   : ${env.IMAGE_TAG}
+IMAGE PUSH SUCCESSFUL
 
-=========================================
+MODULE      : ${params.MODULE}
+ENVIRONMENT : ${params.ENVIRONMENT}
+ECR REPO    : ${env.ECR_REPO}
+IMAGE TAG   : ${env.IMAGE_TAG}
+
+==================================================
 """
         }
 
