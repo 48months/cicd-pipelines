@@ -141,14 +141,13 @@ pipeline {
 
                             sh '''
                             npm cache clean --force || true
-                            npm install -g @angular/cli@8.3.29
                             npm install --force
                             '''
 
                             if (params.ENVIRONMENT in ['dev', 'staging']) {
 
                                 sh '''
-                                ng build \
+                                npx ng build \
                                   --aot=true \
                                   --prod \
                                   --configuration stg
@@ -157,7 +156,7 @@ pipeline {
                             } else {
 
                                 sh '''
-                                ng build \
+                                npx ng build \
                                   --aot=true \
                                   --prod
                                 '''
@@ -304,7 +303,6 @@ pipeline {
 
             echo """
 ==================================================
-
 IMAGE PUSH SUCCESSFUL
 
 MODULE      : ${params.MODULE}
