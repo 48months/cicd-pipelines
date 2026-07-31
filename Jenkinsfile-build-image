@@ -16,7 +16,7 @@ pipeline {
                 'retail',
                 'soa'
             ],
-            description: 'Module Name'
+            description: 'Select Module'
         )
 
         choice(
@@ -25,9 +25,9 @@ pipeline {
                 'dev',
                 'staging',
                 'preprod',
-                'production'
+                'prod'
             ],
-            description: 'Environment'
+            description: 'Select Environment'
         )
 
         choice(
@@ -56,24 +56,68 @@ pipeline {
 
                 script {
 
-                    def repos = [
+                    def moduleConfig = [
 
-                        frontend  : 'git@github.com:48months/frontend-module.git',
-                        messaging : 'git@github.com:48months/messaging-module.git',
-                        node      : 'git@github.com:48months/node-module.git',
-                        database  : 'git@github.com:48months/database-module.git',
-                        auth      : 'git@github.com:48months/auth-module.git',
-                        digistore : 'git@github.com:48months/digistore-module.git',
-                        retail    : 'git@github.com:48months/retail-module.git',
-                        soa       : 'git@github.com:48months/soa-module.git'
+                        frontend : [
+                            git : 'git@github.com:48months/frontend-module.git',
+                            ecr : 'frontend-development'
+                        ],
+
+                        messaging : [
+                            git : 'git@github.com:48months/messaging-module.git',
+                            ecr : 'messaging-module-development'
+                        ],
+
+                        node : [
+                            git : 'git@github.com:48months/node-module.git',
+                            ecr : 'node-module-development'
+                        ],
+
+                        digistore : [
+                            git : 'git@github.com:48months/digistore-module.git',
+                            ecr : 'digistore-module'
+                        ],
+
+                        retail : [
+                            git : 'git@github.com:48months/retail-module.git',
+                            ecr : 'retail-sim-module'
+                        ],
+
+                        soa : [
+                            git : 'git@github.com:48months/soa-module.git',
+                            ecr : 'soa-module-development'
+                        ],
+
+                        database : [
+                            git : 'git@github.com:48months/database-module.git',
+                            ecr : 'database-module'
+                        ],
+
+                        auth : [
+                            git : 'git@github.com:48months/auth-module.git',
+                            ecr : 'auth-module'
+                        ]
                     ]
 
-                    git(
-                        url: repos[params.MODULE],
-                        branch: params.ENVIRONMENT == 'production'
-                                ? 'production'
-                                : params.ENVIRONMENT,
-                        credentialsId: 'Git_ID'
+                    env.GIT_REPO =
+                        moduleConfig[params.MODULE].git
+
+                    env.ECR_REPO =
+                        moduleConfig[params.MODULE].ecr
+
+                    def branchMap = [
+                        dev     : 'development',
+                        staging : 'staging',
+                        preprod : 'preproduction',
+                        prod    : 'production'
+                    ]
+
+                    checkout scmGit(
+                        branches: [[name: "*/${branchMap[params.ENVIRONMENT]}"]],
+                        userRemoteConfigs: [[
+                            credentialsId: 'Git_ID',
+                            url: env.GIT_REPO
+                        ]]
                     )
                 }
             }
@@ -85,33 +129,30 @@ pipeline {
 
                 script {
 
-                    if (fileExists('pom.xml')) {
+                    if (fileExists('package.json')) {
+
+                        echo "Node/Angular Application Detected"
 
                         sh '''
-                        mvn clean package -DskipTests
+                        npm cache clean --force || true
+                        npm install --force
                         '''
 
-                    } else if (fileExists('package.json')) {
-
-                        sh '''
-                        npm install
-                        npm run build
-                        '''
                     } else {
 
-                        echo "No build step detected"
+                        echo "Skipping npm build"
                     }
                 }
             }
         }
 
-        stage('ECR Login') {
+        stage('AWS ECR Login') {
 
             steps {
 
                 script {
 
-                    def accountId = params.AWS_ACCOUNT == 'non-prod'
+                    def awsId = params.AWS_ACCOUNT == 'non-prod'
                         ? env.NON_PROD_ID
                         : env.PROD_ID
 
@@ -124,11 +165,11 @@ pipeline {
 
                         sh """
                         aws ecr get-login-password \
-                        --region ${AWS_REGION} \
-                        | docker login \
-                          --username AWS \
-                          --password-stdin \
-                          ${accountId}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                        --region ${AWS_REGION} | \
+                        docker login \
+                        --username AWS \
+                        --password-stdin \
+                        ${awsId}.dkr.ecr.${AWS_REGION}.amazonaws.com
                         """
                     }
                 }
@@ -146,30 +187,52 @@ pipeline {
 
                     sh """
                     docker build \
-                      -t ${params.MODULE}:${IMAGE_TAG} .
+                      --pull \
+                      --no-cache \
+                      -t ${params.MODULE}:${BUILD_NUMBER} .
                     """
                 }
             }
         }
 
-        stage('Push Image') {
+        stage('Push Docker Image') {
 
             steps {
 
                 script {
 
-                    def accountId = params.AWS_ACCOUNT == 'non-prod'
+                    def awsId = params.AWS_ACCOUNT == 'non-prod'
                         ? env.NON_PROD_ID
                         : env.PROD_ID
 
-                    sh """
-                    docker tag \
-                    ${params.MODULE}:${IMAGE_TAG} \
-                    ${accountId}.dkr.ecr.${AWS_REGION}.amazonaws.com/${params.MODULE}:${IMAGE_TAG}
+                    def tags = []
 
-                    docker push \
-                    ${accountId}.dkr.ecr.${AWS_REGION}.amazonaws.com/${params.MODULE}:${IMAGE_TAG}
-                    """
+                    if (params.ENVIRONMENT in ['dev','staging']) {
+
+                        tags = [
+                            "latest-${params.ENVIRONMENT}",
+                            "${params.ENVIRONMENT}-${BUILD_NUMBER}"
+                        ]
+
+                    } else {
+
+                        tags = [
+                            "latest",
+                            "${params.ENVIRONMENT}-${BUILD_NUMBER}"
+                        ]
+                    }
+
+                    tags.each { tag ->
+
+                        sh """
+                        docker tag \
+                        ${params.MODULE}:${BUILD_NUMBER} \
+                        ${awsId}.dkr.ecr.${AWS_REGION}.amazonaws.com/${env.ECR_REPO}:${tag}
+
+                        docker push \
+                        ${awsId}.dkr.ecr.${AWS_REGION}.amazonaws.com/${env.ECR_REPO}:${tag}
+                        """
+                    }
                 }
             }
         }
@@ -180,11 +243,20 @@ pipeline {
         success {
 
             echo """
-            Image pushed successfully
+=========================================
+Image Push Successful
 
-            Module    : ${params.MODULE}
-            Image Tag : ${env.IMAGE_TAG}
-            """
+Module      : ${params.MODULE}
+Repository  : ${env.ECR_REPO}
+Image Tag   : ${env.IMAGE_TAG}
+
+=========================================
+"""
+        }
+
+        failure {
+
+            echo "Image build/push failed"
         }
 
         always {
