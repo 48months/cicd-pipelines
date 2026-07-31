@@ -1,0 +1,199 @@
+pipeline {
+
+    agent any
+
+    parameters {
+
+        choice(
+            name: 'MODULE',
+            choices: [
+                'frontend',
+                'messaging',
+                'node',
+                'database',
+                'auth',
+                'digistore',
+                'retail',
+                'soa'
+            ],
+            description: 'Module Name'
+        )
+
+        choice(
+            name: 'ENVIRONMENT',
+            choices: [
+                'dev',
+                'staging',
+                'preprod',
+                'production'
+            ],
+            description: 'Environment'
+        )
+
+        choice(
+            name: 'AWS_ACCOUNT',
+            choices: [
+                'non-prod',
+                'prod'
+            ],
+            description: 'AWS Account'
+        )
+    }
+
+    environment {
+
+        AWS_REGION = 'eu-west-1'
+
+        NON_PROD_ID = '194398118151'
+        PROD_ID     = '558050136406'
+    }
+
+    stages {
+
+        stage('Checkout Source') {
+
+            steps {
+
+                script {
+
+                    def repos = [
+
+                        frontend  : 'git@github.com:48months/frontend-module.git',
+                        messaging : 'git@github.com:48months/messaging-module.git',
+                        node      : 'git@github.com:48months/node-module.git',
+                        database  : 'git@github.com:48months/database-module.git',
+                        auth      : 'git@github.com:48months/auth-module.git',
+                        digistore : 'git@github.com:48months/digistore-module.git',
+                        retail    : 'git@github.com:48months/retail-module.git',
+                        soa       : 'git@github.com:48months/soa-module.git'
+                    ]
+
+                    git(
+                        url: repos[params.MODULE],
+                        branch: params.ENVIRONMENT == 'production'
+                                ? 'production'
+                                : params.ENVIRONMENT,
+                        credentialsId: 'Git_ID'
+                    )
+                }
+            }
+        }
+
+        stage('Build Application') {
+
+            steps {
+
+                script {
+
+                    if (fileExists('pom.xml')) {
+
+                        sh '''
+                        mvn clean package -DskipTests
+                        '''
+
+                    } else if (fileExists('package.json')) {
+
+                        sh '''
+                        npm install
+                        npm run build
+                        '''
+                    } else {
+
+                        echo "No build step detected"
+                    }
+                }
+            }
+        }
+
+        stage('ECR Login') {
+
+            steps {
+
+                script {
+
+                    def accountId = params.AWS_ACCOUNT == 'non-prod'
+                        ? env.NON_PROD_ID
+                        : env.PROD_ID
+
+                    withAWS(
+                        credentials: params.AWS_ACCOUNT == 'non-prod'
+                            ? 'aws_non_prod'
+                            : 'aws_prod',
+                        region: env.AWS_REGION
+                    ) {
+
+                        sh """
+                        aws ecr get-login-password \
+                        --region ${AWS_REGION} \
+                        | docker login \
+                          --username AWS \
+                          --password-stdin \
+                          ${accountId}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+
+            steps {
+
+                script {
+
+                    env.IMAGE_TAG =
+                        "${params.ENVIRONMENT}-${BUILD_NUMBER}"
+
+                    sh """
+                    docker build \
+                      -t ${params.MODULE}:${IMAGE_TAG} .
+                    """
+                }
+            }
+        }
+
+        stage('Push Image') {
+
+            steps {
+
+                script {
+
+                    def accountId = params.AWS_ACCOUNT == 'non-prod'
+                        ? env.NON_PROD_ID
+                        : env.PROD_ID
+
+                    sh """
+                    docker tag \
+                    ${params.MODULE}:${IMAGE_TAG} \
+                    ${accountId}.dkr.ecr.${AWS_REGION}.amazonaws.com/${params.MODULE}:${IMAGE_TAG}
+
+                    docker push \
+                    ${accountId}.dkr.ecr.${AWS_REGION}.amazonaws.com/${params.MODULE}:${IMAGE_TAG}
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+
+        success {
+
+            echo """
+            Image pushed successfully
+
+            Module    : ${params.MODULE}
+            Image Tag : ${env.IMAGE_TAG}
+            """
+        }
+
+        always {
+
+            sh '''
+            docker system prune -af --volumes || true
+            '''
+
+            cleanWs()
+        }
+    }
+}
