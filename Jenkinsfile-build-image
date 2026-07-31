@@ -105,7 +105,7 @@ pipeline {
                     env.ECR_REPO = moduleConfig[params.MODULE].ecr
 
                     def branchMap = [
-                        dev     : 'development',
+                        dev     : 'dev',
                         staging : 'staging',
                         preprod : 'preproduction',
                         prod    : 'production'
