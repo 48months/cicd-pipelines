@@ -46,6 +46,8 @@ pipeline {
 
         NON_PROD_ID = '194398118151'
         PROD_ID     = '558050136406'
+
+        NODE_OPTIONS = '--openssl-legacy-provider'
     }
 
     stages {
@@ -142,6 +144,15 @@ pipeline {
                             sh '''
                             npm cache clean --force || true
                             npm install --force
+
+                            echo "Node Version:"
+                            node -v
+
+                            echo "NPM Version:"
+                            npm -v
+
+                            echo "NODE_OPTIONS:"
+                            echo $NODE_OPTIONS
                             '''
 
                             if (params.ENVIRONMENT in ['dev', 'staging']) {
@@ -214,7 +225,7 @@ pipeline {
                 script {
 
                     env.IMAGE_TAG =
-                        "${params.ENVIRONMENT}-${BUILD_NUMBER}"
+                            "${params.ENVIRONMENT}-${BUILD_NUMBER}"
 
                     if (params.MODULE == 'frontend') {
 
