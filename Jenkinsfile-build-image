@@ -189,6 +189,20 @@ pipeline {
                             '''
                         }
 
+                    } else if (params.MODULE == 'messaging') {
+
+                        dir('messaging_solution-mvc') {
+
+                            sh '''
+                            mvn clean package -DskipTests
+
+                            echo "Generated Artifacts"
+                            ls -la target
+
+                            find target -name "*.jar"
+                            '''
+                        }
+
                     } else if (fileExists('package.json')) {
 
                         sh '''
@@ -210,13 +224,13 @@ pipeline {
                 script {
 
                     def awsId = params.AWS_ACCOUNT == 'non-prod'
-                            ? env.NON_PROD_ID
-                            : env.PROD_ID
+                        ? env.NON_PROD_ID
+                        : env.PROD_ID
 
                     withAWS(
                         credentials: params.AWS_ACCOUNT == 'non-prod'
-                                ? 'aws_non_prod'
-                                : 'aws_prod',
+                            ? 'aws_non_prod'
+                            : 'aws_prod',
                         region: env.AWS_REGION
                     ) {
 
@@ -239,7 +253,8 @@ pipeline {
 
                 script {
 
-                    env.IMAGE_TAG = "${params.ENVIRONMENT}-${BUILD_NUMBER}"
+                    env.IMAGE_TAG =
+                        "${params.ENVIRONMENT}-${BUILD_NUMBER}"
 
                     if (params.MODULE == 'frontend') {
 
@@ -283,8 +298,8 @@ pipeline {
                 script {
 
                     def awsId = params.AWS_ACCOUNT == 'non-prod'
-                            ? env.NON_PROD_ID
-                            : env.PROD_ID
+                        ? env.NON_PROD_ID
+                        : env.PROD_ID
 
                     def tags = []
 
