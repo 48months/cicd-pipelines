@@ -90,7 +90,7 @@ pipeline {
                         ],
 
                         soa : [
-                            git : 'git@github.com:48months/soa-module.git',
+                            git : 'git@github.com:48months/soa-client-module.git',
                             ecr : 'soa-client-module_v2'
                         ]
                     ]
