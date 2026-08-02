@@ -8,7 +8,6 @@ pipeline {
             name: 'MODULE',
             choices: [
                 'activemq',
-                'auth',
                 'digistore',
                 'frontend',
                 'messaging',
