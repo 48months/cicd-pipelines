@@ -149,17 +149,17 @@ pipeline {
 
                                 sh '''
                                 npx ng build \
-                                  --aot=true \
-                                  --prod \
-                                  --configuration stg
+                                --aot=true \
+                                --prod \
+                                --configuration stg
                                 '''
 
                             } else {
 
                                 sh '''
                                 npx ng build \
-                                  --aot=true \
-                                  --prod
+                                --aot=true \
+                                --prod
                                 '''
                             }
                         }
@@ -191,16 +191,30 @@ pipeline {
 
                     } else if (params.MODULE == 'messaging') {
 
-                        dir('messaging_solution-mvc') {
+                        configFileProvider([
+                            configFile(
+                                fileId: '7027f691-df79-43c4-bbda-a4805d02bd65',
+                                variable: 'NEXUS_SETTINGS'
+                            )
+                        ]) {
 
-                            sh '''
-                            mvn clean package -DskipTests
+                            dir('messaging_solution-mvc') {
 
-                            echo "Generated Artifacts"
-                            ls -la target
+                                sh """
+                                echo "Using Maven from: ${M2}"
 
-                            find target -name "*.jar"
-                            '''
+                                ${M2}/mvn \
+                                -s ${NEXUS_SETTINGS} \
+                                clean install \
+                                -DskipTests=true
+                                """
+
+                                sh '''
+                                echo "Generated Artifacts"
+                                ls -la target || true
+                                find target -name "*.jar" || true
+                                '''
+                            }
                         }
 
                     } else if (fileExists('package.json')) {
@@ -260,31 +274,31 @@ pipeline {
 
                         sh """
                         docker build \
-                          --pull \
-                          --no-cache \
-                          -t ${params.MODULE}:${BUILD_NUMBER} \
-                          -f ./frontend/Dockerfile \
-                          ./frontend
+                        --pull \
+                        --no-cache \
+                        -t ${params.MODULE}:${BUILD_NUMBER} \
+                        -f ./frontend/Dockerfile \
+                        ./frontend
                         """
 
                     } else if (params.MODULE == 'digistore') {
 
                         sh """
                         docker build \
-                          --pull \
-                          --no-cache \
-                          -t ${params.MODULE}:${BUILD_NUMBER} \
-                          -f ./digistore/Dockerfile \
-                          ./digistore
+                        --pull \
+                        --no-cache \
+                        -t ${params.MODULE}:${BUILD_NUMBER} \
+                        -f ./digistore/Dockerfile \
+                        ./digistore
                         """
 
                     } else {
 
                         sh """
                         docker build \
-                          --pull \
-                          --no-cache \
-                          -t ${params.MODULE}:${BUILD_NUMBER} .
+                        --pull \
+                        --no-cache \
+                        -t ${params.MODULE}:${BUILD_NUMBER} .
                         """
                     }
                 }
