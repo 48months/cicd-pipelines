@@ -193,40 +193,36 @@ pipeline {
 
                 dir('retail-sim') {
 
-                    sh '''
-                    npm install -g @angular/cli
-                    npm install --force
+    sh '''
+    npm install --force
 
-                    node -v
-                    npm -v
+    node -v
+    npm -v
 
-                    ng version
-                    '''
+    npx ng version
+    '''
 
-                    if (params.ENVIRONMENT in ['dev', 'staging']) {
+    if (params.ENVIRONMENT in ['dev', 'staging']) {
 
-                        sh '''
-                        ng build --aot=true
-                        '''
+        sh '''
+        npx ng build --aot=true
+        '''
 
-                    } else {
+    } else {
 
-                        sh '''
-                        ng build --aot=true --configuration=production
-                        '''
-                    }
+        sh '''
+        npx ng build --aot=true --configuration=production
+        '''
+    }
 
-                    sh '''
-                    echo "==== DIST CONTENT ===="
-                    ls -la dist || true
+    sh '''
+    echo "==== DIST CONTENT ===="
+    ls -la dist || true
 
-                    echo "==== DIST TREE ===="
-                    find dist -type d || true
-
-                    echo "==== DIST FILES ===="
-                    find dist -type f | head -50 || true
-                    '''
-                }
+    echo "==== DIST TREE ===="
+    find dist -type d || true
+    '''
+}
 
             }
               else if (params.MODULE == 'messaging') {
