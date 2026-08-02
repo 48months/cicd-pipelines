@@ -191,7 +191,7 @@ pipeline {
 
                     }  else if (params.MODULE == 'retail') {
 
-    nodejs('NODEJS_20') {
+    nodejs('NODESJS_RETAIL') {
 
         dir('retail-sim') {
 
