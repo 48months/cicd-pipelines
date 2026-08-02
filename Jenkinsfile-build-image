@@ -60,46 +60,43 @@ pipeline {
                     def moduleConfig = [
 
                         activemq : [
-                            path : 'activemq-module',
-                            ecr  : 'activemq-crons_v2'
+                            git : 'git@github.com:48months/activemq-cron-module.git',
+                            ecr : 'activemq-crons_v2'
                         ],
 
                         digistore : [
-                            path : 'digistore-module',
-                            ecr  : 'digistore-module_v2'
+                            git : 'git@github.com:48months/digistore.git',
+                            ecr : 'digistore-module_v2'
                         ],
 
                         frontend : [
-                            path : 'frontend-module',
-                            ecr  : 'frontend_v2'
+                            git : 'git@github.com:48months/frontend-module.git',
+                            ecr : 'frontend_v2'
                         ],
 
                         messaging : [
-                            path : 'messaging-module',
-                            ecr  : 'messaging-module_v2'
+                            git : 'git@github.com:48months/messaging-module.git',
+                            ecr : 'messaging-module_v2'
                         ],
 
                         node : [
-                            path : 'node-module',
-                            ecr  : 'node-module_v2'
+                            git : 'git@github.com:48months/node-module.git',
+                            ecr : 'node-module_v2'
                         ],
 
                         retail : [
-                            path : 'retail-module',
-                            ecr  : 'retail-sim-module_v2'
+                            git : 'git@github.com:48months/retail-module.git',
+                            ecr : 'retail-sim-module_v2'
                         ],
 
                         soa : [
-                            path : 'soa-module',
-                            ecr  : 'soa-client-module_v2'
+                            git : 'git@github.com:48months/soa-module.git',
+                            ecr : 'soa-client-module_v2'
                         ]
                     ]
 
-                    env.MODULE_PATH =
-                        moduleConfig[params.MODULE].path
-
-                    env.ECR_REPO =
-                        moduleConfig[params.MODULE].ecr
+                    env.GIT_REPO = moduleConfig[params.MODULE].git
+                    env.ECR_REPO = moduleConfig[params.MODULE].ecr
 
                     def branchMap = [
                         dev     : 'dev',
@@ -109,28 +106,18 @@ pipeline {
                     ]
 
                     checkout scmGit(
-                        branches: [[
-                            name: "*/${branchMap[params.ENVIRONMENT]}"
-                        ]],
+                        branches: [[name: "*/${branchMap[params.ENVIRONMENT]}"]],
                         userRemoteConfigs: [[
                             credentialsId: 'Git_ID',
-                            url: 'git@github.com:48months/48-Helm.git'
+                            url: env.GIT_REPO
                         ]]
                     )
-
-                    sh """
-                    echo "Workspace Structure"
-                    pwd
-                    ls -la
-                    ls -la ${env.MODULE_PATH} || true
-                    """
 
                     echo """
                     ===================================
                     MODULE      : ${params.MODULE}
                     ENVIRONMENT : ${params.ENVIRONMENT}
-                    REPOSITORY  : 48-Helm
-                    MODULE PATH : ${env.MODULE_PATH}
+                    GIT REPO    : ${env.GIT_REPO}
                     ECR REPO    : ${env.ECR_REPO}
                     ===================================
                     """
@@ -146,7 +133,7 @@ pipeline {
 
                     if (params.MODULE == 'frontend') {
 
-                        dir("${env.MODULE_PATH}") {
+                        dir('frontend') {
 
                             sh '''
                             npm cache clean --force || true
@@ -166,6 +153,7 @@ pipeline {
                                   --prod \
                                   --configuration stg
                                 '''
+
                             } else {
 
                                 sh '''
@@ -178,7 +166,7 @@ pipeline {
 
                     } else if (params.MODULE == 'digistore') {
 
-                        dir("${env.MODULE_PATH}") {
+                        dir('digistore') {
 
                             sh '''
                             npm cache clean --force || true
@@ -201,6 +189,12 @@ pipeline {
                             '''
                         }
 
+                    } else if (fileExists('package.json')) {
+
+                        sh '''
+                        npm install --force
+                        '''
+
                     } else {
 
                         echo "No build step required"
@@ -216,13 +210,13 @@ pipeline {
                 script {
 
                     def awsId = params.AWS_ACCOUNT == 'non-prod'
-                        ? env.NON_PROD_ID
-                        : env.PROD_ID
+                            ? env.NON_PROD_ID
+                            : env.PROD_ID
 
                     withAWS(
                         credentials: params.AWS_ACCOUNT == 'non-prod'
-                            ? 'aws_non_prod'
-                            : 'aws_prod',
+                                ? 'aws_non_prod'
+                                : 'aws_prod',
                         region: env.AWS_REGION
                     ) {
 
@@ -245,17 +239,39 @@ pipeline {
 
                 script {
 
-                    env.IMAGE_TAG =
-                        "${params.ENVIRONMENT}-${BUILD_NUMBER}"
+                    env.IMAGE_TAG = "${params.ENVIRONMENT}-${BUILD_NUMBER}"
 
-                    sh """
-                    docker build \
-                      --pull \
-                      --no-cache \
-                      -t ${params.MODULE}:${BUILD_NUMBER} \
-                      -f ./${env.MODULE_PATH}/Dockerfile \
-                      ./${env.MODULE_PATH}
-                    """
+                    if (params.MODULE == 'frontend') {
+
+                        sh """
+                        docker build \
+                          --pull \
+                          --no-cache \
+                          -t ${params.MODULE}:${BUILD_NUMBER} \
+                          -f ./frontend/Dockerfile \
+                          ./frontend
+                        """
+
+                    } else if (params.MODULE == 'digistore') {
+
+                        sh """
+                        docker build \
+                          --pull \
+                          --no-cache \
+                          -t ${params.MODULE}:${BUILD_NUMBER} \
+                          -f ./digistore/Dockerfile \
+                          ./digistore
+                        """
+
+                    } else {
+
+                        sh """
+                        docker build \
+                          --pull \
+                          --no-cache \
+                          -t ${params.MODULE}:${BUILD_NUMBER} .
+                        """
+                    }
                 }
             }
         }
@@ -267,8 +283,8 @@ pipeline {
                 script {
 
                     def awsId = params.AWS_ACCOUNT == 'non-prod'
-                        ? env.NON_PROD_ID
-                        : env.PROD_ID
+                            ? env.NON_PROD_ID
+                            : env.PROD_ID
 
                     def tags = []
 
