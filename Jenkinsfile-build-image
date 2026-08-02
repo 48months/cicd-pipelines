@@ -191,33 +191,35 @@ pipeline {
 
                     } else if (params.MODULE == 'messaging') {
 
-                        configFileProvider([
-                            configFile(
-                                fileId: '7027f691-df79-43c4-bbda-a4805d02bd65',
-                                variable: 'NEXUS_SETTINGS'
-                            )
-                        ]) {
+    configFileProvider([
+        configFile(
+            fileId: '7027f691-df79-43c4-bbda-a4805d02bd65',
+            variable: 'NEXUS_SETTINGS'
+        )
+    ]) {
 
-                            dir('messaging_solution-mvc') {
+        sh """
+        echo "Using Maven from: ${M2}"
+        echo "Using Nexus Settings: ${NEXUS_SETTINGS}"
 
-                                sh """
-                                echo "Using Maven from: ${M2}"
+        ${M2}/mvn \
+        -U \
+        -s ${NEXUS_SETTINGS} \
+        clean install \
+        -DskipTests=true
+        """
 
-                                ${M2}/mvn \
-                                -s ${NEXUS_SETTINGS} \
-                                clean install \
-                                -DskipTests=true
-                                """
+        sh '''
+        echo "Generated Artifacts"
+        find . -name "*.jar" || true
 
-                                sh '''
-                                echo "Generated Artifacts"
-                                ls -la target || true
-                                find target -name "*.jar" || true
-                                '''
-                            }
-                        }
+        echo "MVC Target Contents"
+        ls -la messaging_solution-mvc/target || true
+        '''
+    }
 
-                    } else if (fileExists('package.json')) {
+}
+else if (fileExists('package.json')) {
 
                         sh '''
                         npm install --force
