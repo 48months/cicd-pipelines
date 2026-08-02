@@ -189,42 +189,44 @@ pipeline {
                             '''
                         }
 
-                    } else if (params.MODULE == 'retail') {
+                    } } else if (params.MODULE == 'retail') {
 
-                dir('retail-sim') {
+    nodejs('NODEJS_20') {
 
-    sh '''
-    npm install --force
+        dir('retail-sim') {
 
-    node -v
-    npm -v
+            sh '''
+            node -v
+            npm -v
 
-    npx ng version
-    '''
+            npm install --force
 
-    if (params.ENVIRONMENT in ['dev', 'staging']) {
+            npx ng version
+            '''
 
-        sh '''
-        npx ng build --aot=true
-        '''
+            if (params.ENVIRONMENT in ['dev', 'staging']) {
 
-    } else {
+                sh '''
+                npx ng build --aot=true
+                '''
 
-        sh '''
-        npx ng build --aot=true --configuration=production
-        '''
-    }
+            } else {
 
-    sh '''
-    echo "==== DIST CONTENT ===="
-    ls -la dist || true
-
-    echo "==== DIST TREE ===="
-    find dist -type d || true
-    '''
-}
-
+                sh '''
+                npx ng build --aot=true --configuration=production
+                '''
             }
+
+            sh '''
+            echo "==== DIST CONTENT ===="
+            ls -la dist || true
+
+            echo "==== DIST TREE ===="
+            find dist -type d || true
+            '''
+        }
+    }
+}
               else if (params.MODULE == 'messaging') {
 
     configFileProvider([
