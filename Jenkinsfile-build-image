@@ -259,22 +259,35 @@ pipeline {
 }
 else if (params.MODULE == 'soa') {
 
-    sh '''
-    echo "Building SOA Module"
+    configFileProvider([
+        configFile(
+            fileId: '7027f691-df79-43c4-bbda-a4805d02bd65',
+            variable: 'NEXUS_SETTINGS'
+        )
+    ]) {
 
-    mvn -version
+        sh """
+        echo "Building SOA Module"
 
-    mvn clean install -DskipTests=true
-    '''
+        echo "Using Maven from: ${M2}"
 
-    sh '''
-    echo "Generated JAR Files"
-    find . -name "*.jar" || true
+        ${M2}/mvn \
+        -U \
+        -s ${NEXUS_SETTINGS} \
+        clean install \
+        -DskipTests=true
+        """
 
-    echo "Target Directory"
-    ls -la target || true
-    '''
+        sh '''
+        echo "Generated JAR Files"
+        find . -name "*.jar" || true
+
+        echo "Target Directory"
+        ls -la target || true
+        '''
+    }
 }
+
 else if (fileExists('package.json')) {
 
                         sh '''
