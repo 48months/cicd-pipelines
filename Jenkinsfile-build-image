@@ -168,6 +168,35 @@ pipeline {
                             }
                         }
 
+                    } else if (params.MODULE == 'digistore') {
+
+                        dir('digistore') {
+
+                            sh '''
+                            npm cache clean --force || true
+                            npm install --force
+
+                            echo "Node Version:"
+                            node -v
+
+                            echo "NPM Version:"
+                            npm -v
+
+                            echo "NODE_OPTIONS:"
+                            echo $NODE_OPTIONS
+                            '''
+
+                            sh '''
+                            npx ng build --prod
+                            '''
+
+                            sh '''
+                            echo "Build output:"
+                            ls -la dist
+                            ls -la dist/digistore || true
+                            '''
+                        }
+
                     } else if (fileExists('package.json')) {
 
                         sh '''
@@ -219,7 +248,7 @@ pipeline {
                 script {
 
                     env.IMAGE_TAG =
-                            "${params.ENVIRONMENT}-${BUILD_NUMBER}"
+                        "${params.ENVIRONMENT}-${BUILD_NUMBER}"
 
                     if (params.MODULE == 'frontend') {
 
@@ -232,26 +261,26 @@ pipeline {
                           ./frontend
                         """
 
-                       } else if (params.MODULE == 'digistore') {
+                    } else if (params.MODULE == 'digistore') {
 
-    sh """
-    docker build \
-      --pull \
-      --no-cache \
-      -t ${params.MODULE}:${BUILD_NUMBER} \
-      -f ./digistore/Dockerfile \
-      ./digistore
-    """
+                        sh """
+                        docker build \
+                          --pull \
+                          --no-cache \
+                          -t ${params.MODULE}:${BUILD_NUMBER} \
+                          -f ./digistore/Dockerfile \
+                          ./digistore
+                        """
 
-} else {
+                    } else {
 
-    sh """
-    docker build \
-      --pull \
-      --no-cache \
-      -t ${params.MODULE}:${BUILD_NUMBER} .
-    """
-}
+                        sh """
+                        docker build \
+                          --pull \
+                          --no-cache \
+                          -t ${params.MODULE}:${BUILD_NUMBER} .
+                        """
+                    }
                 }
             }
         }
