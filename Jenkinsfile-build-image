@@ -85,7 +85,7 @@ pipeline {
                         ],
 
                         retail : [
-                            git : 'git@github.com:48months/retail-module.git',
+                            git : 'git@github.com:48months/retail_sim_store.git',
                             ecr : 'retail-sim-module_v2'
                         ],
 
