@@ -189,7 +189,47 @@ pipeline {
                             '''
                         }
 
-                    } else if (params.MODULE == 'messaging') {
+                    } else if (params.MODULE == 'retail') {
+
+                dir('retail-sim') {
+
+                    sh '''
+                    npm install -g @angular/cli
+                    npm install --force
+
+                    node -v
+                    npm -v
+
+                    ng version
+                    '''
+
+                    if (params.ENVIRONMENT in ['dev', 'staging']) {
+
+                        sh '''
+                        ng build --aot=true
+                        '''
+
+                    } else {
+
+                        sh '''
+                        ng build --aot=true --configuration=production
+                        '''
+                    }
+
+                    sh '''
+                    echo "==== DIST CONTENT ===="
+                    ls -la dist || true
+
+                    echo "==== DIST TREE ===="
+                    find dist -type d || true
+
+                    echo "==== DIST FILES ===="
+                    find dist -type f | head -50 || true
+                    '''
+                }
+
+            }
+              else if (params.MODULE == 'messaging') {
 
     configFileProvider([
         configFile(
