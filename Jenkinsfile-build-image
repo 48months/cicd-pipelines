@@ -139,13 +139,9 @@ pipeline {
                             npm cache clean --force || true
                             npm install --force
 
-                            echo "Node Version:"
                             node -v
-
-                            echo "NPM Version:"
                             npm -v
 
-                            echo "NODE_OPTIONS:"
                             echo $NODE_OPTIONS
                             '''
 
@@ -176,24 +172,20 @@ pipeline {
                             npm cache clean --force || true
                             npm install --force
 
-                            echo "Node Version:"
                             node -v
-
-                            echo "NPM Version:"
                             npm -v
 
-                            echo "NODE_OPTIONS:"
                             echo $NODE_OPTIONS
                             '''
 
                             sh '''
-                            npx ng build --prod
+                            npx ng build --configuration production
                             '''
 
                             sh '''
-                            echo "Build output:"
-                            ls -la dist
-                            ls -la dist/digistore || true
+                            echo "Build Output"
+                            ls -la dist || true
+                            find dist -type d || true
                             '''
                         }
 
@@ -247,8 +239,7 @@ pipeline {
 
                 script {
 
-                    env.IMAGE_TAG =
-                        "${params.ENVIRONMENT}-${BUILD_NUMBER}"
+                    env.IMAGE_TAG = "${params.ENVIRONMENT}-${BUILD_NUMBER}"
 
                     if (params.MODULE == 'frontend') {
 
