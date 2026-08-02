@@ -64,13 +64,8 @@ pipeline {
                             ecr : 'activemq-crons_v2'
                         ],
 
-                        auth : [
-                            git : 'git@github.com:48months/auth-module.git',
-                            ecr : 'java-base-image_v2'
-                        ],
-
                         digistore : [
-                            git : 'git@github.com:48months/digistore-module.git',
+                            git : 'git@github.com:48months/digistore.git',
                             ecr : 'digistore-module_v2'
                         ],
 
