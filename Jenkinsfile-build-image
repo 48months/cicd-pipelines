@@ -257,6 +257,24 @@ pipeline {
     }
 
 }
+else if (params.MODULE == 'soa') {
+
+    sh '''
+    echo "Building SOA Module"
+
+    mvn -version
+
+    mvn clean install -DskipTests=true
+    '''
+
+    sh '''
+    echo "Generated JAR Files"
+    find . -name "*.jar" || true
+
+    echo "Target Directory"
+    ls -la target || true
+    '''
+}
 else if (fileExists('package.json')) {
 
                         sh '''
