@@ -232,15 +232,26 @@ pipeline {
                           ./frontend
                         """
 
-                    } else {
+                       } else if (params.MODULE == 'digistore') {
 
-                        sh """
-                        docker build \
-                          --pull \
-                          --no-cache \
-                          -t ${params.MODULE}:${BUILD_NUMBER} .
-                        """
-                    }
+    sh """
+    docker build \
+      --pull \
+      --no-cache \
+      -t ${params.MODULE}:${BUILD_NUMBER} \
+      -f ./digistore/Dockerfile \
+      ./digistore
+    """
+
+} else {
+
+    sh """
+    docker build \
+      --pull \
+      --no-cache \
+      -t ${params.MODULE}:${BUILD_NUMBER} .
+    """
+}
                 }
             }
         }
