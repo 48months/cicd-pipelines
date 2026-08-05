@@ -89,10 +89,11 @@ pipeline {
                             git : 'git@github.com:48months/retail_sim_store.git',
                             ecr : 'retail-sim-module_v2'
                         ],
+
                         database : [
-                            git : 'git@github.com:48months/database-module.git',
-                            ecr : 'java-base-image_v2'
+                            git : 'git@github.com:48months/database-module.git'
                         ],
+
                         soa : [
                             git : 'git@github.com:48months/soa-client-module.git',
                             ecr : 'soa-client-module_v2'
@@ -100,7 +101,29 @@ pipeline {
                     ]
 
                     env.GIT_REPO = moduleConfig[params.MODULE].git
-                    env.ECR_REPO = moduleConfig[params.MODULE].ecr
+
+                    if (params.MODULE == 'database') {
+
+                        switch(params.ENVIRONMENT) {
+
+                            case 'dev':
+                            case 'staging':
+                                env.ECR_REPO = 'java-base-image'
+                                break
+
+                            case 'preprod':
+                                env.ECR_REPO = 'pre-prod-java-base-image'
+                                break
+
+                            case 'prod':
+                                env.ECR_REPO = 'prod-java-base-image'
+                                break
+                        }
+
+                    } else {
+
+                        env.ECR_REPO = moduleConfig[params.MODULE].ecr
+                    }
 
                     def branchMap = [
                         dev     : 'dev',
@@ -118,13 +141,13 @@ pipeline {
                     )
 
                     echo """
-                    ===================================
-                    MODULE      : ${params.MODULE}
-                    ENVIRONMENT : ${params.ENVIRONMENT}
-                    GIT REPO    : ${env.GIT_REPO}
-                    ECR REPO    : ${env.ECR_REPO}
-                    ===================================
-                    """
+==================================================
+MODULE      : ${params.MODULE}
+ENVIRONMENT : ${params.ENVIRONMENT}
+GIT REPO    : ${env.GIT_REPO}
+ECR REPO    : ${env.ECR_REPO}
+==================================================
+"""
                 }
             }
         }
@@ -157,8 +180,8 @@ pipeline {
                                 --prod \
                                 --configuration stg
                                 '''
-
-                            } else {
+                            }
+                            else {
 
                                 sh '''
                                 npx ng build \
@@ -178,121 +201,91 @@ pipeline {
 
                             node -v
                             npm -v
-
-                            echo $NODE_OPTIONS
                             '''
 
                             sh '''
                             npx ng build --configuration production
                             '''
-
-                            sh '''
-                            echo "Build Output"
-                            ls -la dist || true
-                            find dist -type d || true
-                            '''
                         }
 
-                    }  else if (params.MODULE == 'retail') {
+                    } else if (params.MODULE == 'retail') {
 
-    nodejs('NODESJS_RETAIL') {
+                        nodejs('NODESJS_RETAIL') {
 
-        dir('retail-sim') {
+                            dir('retail-sim') {
 
-            sh '''
-            node -v
-            npm -v
+                                sh '''
+                                node -v
+                                npm -v
 
-            npm install --force
+                                npm install --force
+                                '''
 
-            npx ng version
-            '''
+                                if (params.ENVIRONMENT in ['dev', 'staging']) {
 
-            if (params.ENVIRONMENT in ['dev', 'staging']) {
+                                    sh '''
+                                    npx ng build --aot=true
+                                    '''
+                                }
+                                else {
 
-                sh '''
-                npx ng build --aot=true
-                '''
+                                    sh '''
+                                    npx ng build --aot=true --configuration=production
+                                    '''
+                                }
+                            }
+                        }
 
-            } else {
+                    } else if (params.MODULE == 'messaging') {
 
-                sh '''
-                npx ng build --aot=true --configuration=production
-                '''
-            }
+                        configFileProvider([
+                            configFile(
+                                fileId: '7027f691-df79-43c4-bbda-a4805d02bd65',
+                                variable: 'NEXUS_SETTINGS'
+                            )
+                        ]) {
 
-            sh '''
-            echo "==== DIST CONTENT ===="
-            ls -la dist || true
+                            sh """
+                            ${M2}/mvn \
+                            -U \
+                            -s ${NEXUS_SETTINGS} \
+                            clean install \
+                            -DskipTests=true
+                            """
+                        }
 
-            echo "==== DIST TREE ===="
-            find dist -type d || true
-            '''
-        }
-    }
-}
-              else if (params.MODULE == 'messaging') {
+                    } else if (params.MODULE == 'soa') {
 
-    configFileProvider([
-        configFile(
-            fileId: '7027f691-df79-43c4-bbda-a4805d02bd65',
-            variable: 'NEXUS_SETTINGS'
-        )
-    ]) {
+                        configFileProvider([
+                            configFile(
+                                fileId: '7027f691-df79-43c4-bbda-a4805d02bd65',
+                                variable: 'NEXUS_SETTINGS'
+                            )
+                        ]) {
 
-        sh """
-        echo "Using Maven from: ${M2}"
-        echo "Using Nexus Settings: ${NEXUS_SETTINGS}"
+                            sh """
+                            ${M2}/mvn \
+                            -U \
+                            -s ${NEXUS_SETTINGS} \
+                            clean install \
+                            -DskipTests=true
+                            """
+                        }
 
-        ${M2}/mvn \
-        -U \
-        -s ${NEXUS_SETTINGS} \
-        clean install \
-        -DskipTests=true
-        """
+                    } else if (params.MODULE == 'database') {
 
-        sh '''
-        echo "Generated Artifacts"
-        find . -name "*.jar" || true
+                        def mvnHome = tool(
+                            name: 'MAVEN_3.8.8',
+                            type: 'maven'
+                        )
 
-        echo "MVC Target Contents"
-        ls -la messaging_solution-mvc/target || true
-        '''
-    }
+                        sh """
+                        ${mvnHome}/bin/mvn \
+                        clean install \
+                        -DskipTests=true
+                        """
 
-}
-else if (params.MODULE == 'soa') {
-
-    configFileProvider([
-        configFile(
-            fileId: '7027f691-df79-43c4-bbda-a4805d02bd65',
-            variable: 'NEXUS_SETTINGS'
-        )
-    ]) {
-
-        sh """
-        echo "Building SOA Module"
-
-        echo "Using Maven from: ${M2}"
-
-        ${M2}/mvn \
-        -U \
-        -s ${NEXUS_SETTINGS} \
-        clean install \
-        -DskipTests=true
-        """
-
-        sh '''
-        echo "Generated JAR Files"
-        find . -name "*.jar" || true
-
-        echo "Target Directory"
-        ls -la target || true
-        '''
-    }
-}
-
-else if (fileExists('package.json')) {
+                    } else if (fileExists('package.json')) {
 
                         sh '''
                         npm install --force
@@ -312,14 +305,35 @@ else if (fileExists('package.json')) {
 
                 script {
 
-                    def awsId = params.AWS_ACCOUNT == 'non-prod'
+                    if (params.MODULE == 'database' &&
+                        params.AWS_ACCOUNT == 'prod') {
+
+                        withAWS(
+                            credentials: 'aws_non_prod',
+                            region: env.AWS_REGION
+                        ) {
+
+                            sh """
+                            aws ecr get-login-password \
+                            --region ${AWS_REGION} | \
+                            docker login \
+                            --username AWS \
+                            --password-stdin \
+                            ${NON_PROD_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                            """
+                        }
+                    }
+
+                    def awsId =
+                        params.AWS_ACCOUNT == 'non-prod'
                         ? env.NON_PROD_ID
                         : env.PROD_ID
 
                     withAWS(
-                        credentials: params.AWS_ACCOUNT == 'non-prod'
-                            ? 'aws_non_prod'
-                            : 'aws_prod',
+                        credentials:
+                        params.AWS_ACCOUNT == 'non-prod'
+                        ? 'aws_non_prod'
+                        : 'aws_prod',
                         region: env.AWS_REGION
                     ) {
 
@@ -351,7 +365,7 @@ else if (fileExists('package.json')) {
                         docker build \
                         --pull \
                         --no-cache \
-                        -t ${params.MODULE}:${BUILD_NUMBER} \
+                        -t frontend:${BUILD_NUMBER} \
                         -f ./frontend/Dockerfile \
                         ./frontend
                         """
@@ -362,9 +376,27 @@ else if (fileExists('package.json')) {
                         docker build \
                         --pull \
                         --no-cache \
-                        -t ${params.MODULE}:${BUILD_NUMBER} \
+                        -t digistore:${BUILD_NUMBER} \
                         -f ./digistore/Dockerfile \
                         ./digistore
+                        """
+
+                    } else if (params.MODULE == 'database') {
+
+                        def profileMap = [
+                            dev     : 'dev',
+                            staging : 'staging',
+                            preprod : 'preprod',
+                            prod    : 'production'
+                        ]
+
+                        sh """
+                        docker build \
+                        --pull \
+                        --no-cache \
+                        --build-arg profile=${profileMap[params.ENVIRONMENT]} \
+                        -t database:${BUILD_NUMBER} \
+                        -f Dockerfile .
                         """
 
                     } else {
@@ -386,7 +418,8 @@ else if (fileExists('package.json')) {
 
                 script {
 
-                    def awsId = params.AWS_ACCOUNT == 'non-prod'
+                    def awsId =
+                        params.AWS_ACCOUNT == 'non-prod'
                         ? env.NON_PROD_ID
                         : env.PROD_ID
 
@@ -421,11 +454,16 @@ else if (fileExists('package.json')) {
                         ]
                     }
 
+                    def imageName =
+                        params.MODULE == 'database'
+                        ? "database:${BUILD_NUMBER}"
+                        : "${params.MODULE}:${BUILD_NUMBER}"
+
                     tags.each { tag ->
 
                         sh """
                         docker tag \
-                        ${params.MODULE}:${BUILD_NUMBER} \
+                        ${imageName} \
                         ${awsId}.dkr.ecr.${AWS_REGION}.amazonaws.com/${env.ECR_REPO}:${tag}
 
                         docker push \
