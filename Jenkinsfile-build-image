@@ -109,7 +109,7 @@ pipeline {
 
                             case 'dev':
                             case 'staging':
-                                env.ECR_REPO = 'java-base-image'
+                                env.ECR_REPO = 'java-base-image_v2'
                                 break
 
                             case 'preprod':
