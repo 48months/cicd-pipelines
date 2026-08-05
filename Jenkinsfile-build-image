@@ -13,6 +13,7 @@ pipeline {
                 'messaging',
                 'node',
                 'retail',
+                'database',
                 'soa'
             ],
             description: 'Select Module'
