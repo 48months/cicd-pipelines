@@ -91,7 +91,8 @@ pipeline {
                         ],
 
                         database : [
-                            git : 'git@github.com:48months/database-module.git'
+                            git : 'git@github.com:48months/database-module.git',
+                            ecr : 'java-base-image_v2'
                         ],
 
                         soa : [
